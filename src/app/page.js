@@ -1,5 +1,8 @@
+"use client"
+
 import React, { useState, useEffect } from 'react';
-import { Plus, Calendar, Clock, Pill, CheckCircle, Circle } from 'lucide-react';
+import { Plus, Calendar, Clock, Pill, CheckCircle, Circle, Trash2 } from 'lucide-react';
+import { commonMedications } from '../data/medications';
 
 const PillTracker = () => {
   const [medications, setMedications] = useState([]);
@@ -10,37 +13,104 @@ const PillTracker = () => {
     name: '',
     description: '',
     scheduleType: 'daily', // 'daily' or 'first-day-different'
-    dailyDoses: [{ time: '08:00', pills: 1 }],
+    dailyDoses: [{ time: '12:00', pills: 1 }],
     firstDayPills: 2,
     regularDayPills: 1
   });
+  const [showAutocomplete, setShowAutocomplete] = useState(false);
+  const [filteredMedications, setFilteredMedications] = useState([]);
 
-  // Initialize with sample data
+  // Load medications from localStorage
   useEffect(() => {
-    const sampleMeds = [
-      {
-        id: 1,
-        name: 'Vitamin D',
-        description: 'Daily vitamin supplement',
-        scheduleType: 'daily',
-        dailyDoses: [{ time: '08:00', pills: 1 }],
-        firstDayPills: 1,
-        regularDayPills: 1
-      },
-      {
-        id: 2,
-        name: 'Antibiotic',
-        description: '7-day course',
-        scheduleType: 'first-day-different',
-        dailyDoses: [{ time: '08:00', pills: 1 }, { time: '20:00', pills: 1 }],
-        firstDayPills: 2,
-        regularDayPills: 1
+    const savedMeds = localStorage.getItem('pillTrackerMedications');
+    if (savedMeds) {
+      try {
+        setMedications(JSON.parse(savedMeds));
+      } catch (error) {
+        console.error('Error loading medications from localStorage:', error);
       }
-    ];
-    setMedications(sampleMeds);
+    }
   }, []);
 
+  // Save medications to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('pillTrackerMedications', JSON.stringify(medications));
+  }, [medications]);
+
   const [medicationHistory, setMedicationHistory] = useState({});
+
+  // Helper function to get current date in UTC for storage
+  const getCurrentDateUTC = () => {
+    const now = new Date();
+    const utcString = now.toUTCString();
+    return utcString;
+  };
+
+  // Helper function to convert UTC string to local date string for display
+  const utcToLocalDateString = (utcString) => {
+    const date = new Date(utcString);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  // Load medication history from localStorage
+  useEffect(() => {
+    const savedHistory = localStorage.getItem('pillTrackerHistory');
+    if (savedHistory) {
+      try {
+        setMedicationHistory(JSON.parse(savedHistory));
+      } catch (error) {
+        console.error('Error loading medication history from localStorage:', error);
+      }
+    }
+  }, []);
+
+  // Save medication history to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('pillTrackerHistory', JSON.stringify(medicationHistory));
+  }, [medicationHistory]);
+
+  // Filter medications for autocomplete
+  const filterMedications = (input) => {
+    if (!input.trim()) {
+      setFilteredMedications([]);
+      setShowAutocomplete(false);
+      return;
+    }
+    
+    const filtered = commonMedications.filter(med => 
+      med.name.toLowerCase().includes(input.toLowerCase()) ||
+      med.description.toLowerCase().includes(input.toLowerCase())
+    );
+    
+    setFilteredMedications(filtered.slice(0, 8)); // Limit to 8 results
+    setShowAutocomplete(filtered.length > 0);
+  };
+
+  const selectMedication = (med) => {
+    setNewMed(prev => ({
+      ...prev,
+      name: med.name,
+      description: med.description
+    }));
+    setShowAutocomplete(false);
+  };
+
+  // Close autocomplete when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showAddForm && !event.target.closest('.autocomplete-container')) {
+        setShowAutocomplete(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showAddForm]);
 
   const addDose = () => {
     setNewMed(prev => ({
@@ -76,7 +146,7 @@ const PillTracker = () => {
       name: '',
       description: '',
       scheduleType: 'daily',
-      dailyDoses: [{ time: '08:00', pills: 1 }],
+      dailyDoses: [{ time: '12:00', pills: 1 }],
       firstDayPills: 2,
       regularDayPills: 1
     });
@@ -104,6 +174,22 @@ const PillTracker = () => {
     setEditingMed(null);
   };
 
+  const deleteMedication = (medId, medName) => {
+    if (window.confirm(`Are you sure you want to delete "${medName}"? This action cannot be undone.`)) {
+      setMedications(prev => prev.filter(med => med.id !== medId));
+      // Also clean up any history for this medication
+      setMedicationHistory(prev => {
+        const newHistory = {};
+        Object.keys(prev).forEach(key => {
+          if (!key.startsWith(`${medId}-`)) {
+            newHistory[key] = prev[key];
+          }
+        });
+        return newHistory;
+      });
+    }
+  };
+
   const toggleMedicationTaken = (medId, doseIndex, date) => {
     const key = `${medId}-${doseIndex}-${date}`;
     setMedicationHistory(prev => ({
@@ -117,7 +203,9 @@ const PillTracker = () => {
     for (let i = -(daysToShow - 1); i <= 0; i++) {
       const date = new Date();
       date.setDate(date.getDate() + i);
-      days.push(date.toISOString().split('T')[0]);
+      // Store in UTC
+      const utcString = date.toUTCString();
+      days.push(utcString);
     }
     return days;
   };
@@ -146,14 +234,21 @@ const PillTracker = () => {
     return med.dailyDoses;
   };
 
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
+  const formatDate = (utcString) => {
+    const date = new Date(utcString);
+    const todayUTC = getCurrentDateUTC();
+    const todayLocal = utcToLocalDateString(todayUTC);
+    const dateLocal = utcToLocalDateString(utcString);
+    
+    // Create yesterday for comparison
     const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayUTC = yesterday.toUTCString();
+    const yesterdayLocal = utcToLocalDateString(yesterdayUTC);
     
-    if (dateString === today.toISOString().split('T')[0]) return 'Today';
-    if (dateString === yesterday.toISOString().split('T')[0]) return 'Yesterday';
+    if (dateLocal === todayLocal) return `Today (${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})`;
+    if (dateLocal === yesterdayLocal) return `Yesterday (${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})`;
     
     return date.toLocaleDateString('en-US', { 
       weekday: 'short', 
@@ -162,15 +257,6 @@ const PillTracker = () => {
     });
   };
 
-  const getDayNavigation = () => {
-    const days = [];
-    for (let i = -7; i <= 0; i++) {
-      const date = new Date();
-      date.setDate(date.getDate() + i);
-      days.push(date.toISOString().split('T')[0]);
-    }
-    return days;
-  };
 
   const getCompletionStats = (med, date) => {
     const schedule = getMedicationScheduleForDay(med, date);
@@ -181,7 +267,7 @@ const PillTracker = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-2">
+    <div className="min-h-screen bg-gray-50 p-2 text-black">
       <div className="h-screen flex flex-col">
         {/* Header */}
         <div className="bg-white rounded-lg shadow-sm p-4 mb-2 flex-shrink-0">
@@ -205,7 +291,7 @@ const PillTracker = () => {
                 onClick={addMoreDays}
                 className="bg-gray-500 hover:bg-gray-600 text-white px-3 py-1 rounded text-sm transition-colors"
               >
-                + Day
+                + Past Day
               </button>
             )}
             
@@ -214,33 +300,35 @@ const PillTracker = () => {
                 onClick={removeDay}
                 className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm transition-colors"
               >
-                - Day
+                - Past Day
               </button>
             )}
             
             <span className="text-sm text-gray-600 ml-2">
               Showing {daysToShow} day{daysToShow !== 1 ? 's' : ''}
             </span>
+            <div className="text-xs text-gray-500 ml-4">
+              💡 "Today" updates automatically each day
+            </div>
           </div>
         </div>
 
         {/* Date Headers - Only show if we have medications */}
         {medications.length > 0 && (
           <div className="bg-white rounded-lg shadow-sm p-3 mb-2 flex-shrink-0">
-            <div className="grid gap-2" style={{ gridTemplateColumns: `240px repeat(${getAllDays().length}, minmax(120px, 1fr))` }}>
+            <div className="grid gap-2" style={{ gridTemplateColumns: `240px repeat(${getAllDays().length}, minmax(200px, 200px))` }}>
               <div></div> {/* Empty space for medication names column */}
               {getAllDays().map(date => {
-                const isToday = date === new Date().toISOString().split('T')[0];
+                const todayUTC = getCurrentDateUTC();
+                const todayLocal = utcToLocalDateString(todayUTC);
+                const dateLocal = utcToLocalDateString(date);
+                const isToday = dateLocal === todayLocal;
                 return (
                   <div key={date} className="text-center border-l border-gray-200 first:border-l-0 px-2">
                     <div className={`text-sm font-medium ${isToday ? 'text-blue-600' : 'text-gray-600'}`}>
                       {formatDate(date)}
                     </div>
-                    {isToday && (
-                      <div className="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded mt-1 inline-block">
-                        Today
-                      </div>
-                    )}
+
                   </div>
                 );
               })}
@@ -249,15 +337,22 @@ const PillTracker = () => {
         )}
 
         {/* Medications List */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto text-black">
           <div className="space-y-2">
             {medications.map(med => {
               const allDays = getAllDays();
               const isEditing = editingMed?.id === med.id;
               
               return (
-                <div key={med.id} className="bg-white rounded-lg shadow-sm p-3">
-                  <div className="grid gap-2" style={{ gridTemplateColumns: `240px repeat(${allDays.length}, minmax(120px, 1fr))` }}>
+                <div key={med.id} className="bg-white rounded-lg shadow-sm p-3 relative">
+                  <button
+                    onClick={() => deleteMedication(med.id, med.name)}
+                    className="absolute top-2 right-2 text-gray-400 hover:text-red-500 transition-colors p-1"
+                    title="Delete medication"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                  <div className="grid gap-2" style={{ gridTemplateColumns: `240px repeat(${allDays.length}, minmax(200px, 200px))` }}>
                     {/* Medication Info */}
                     <div className="pr-4 flex flex-col justify-center">
                       {isEditing ? (
@@ -309,7 +404,10 @@ const PillTracker = () => {
                     {/* Progress Grid - aligned with date headers */}
                     {allDays.map(date => {
                       const schedule = getMedicationScheduleForDay(med, date);
-                      const isToday = date === new Date().toISOString().split('T')[0];
+                      const todayUTC = getCurrentDateUTC();
+                      const todayLocal = utcToLocalDateString(todayUTC);
+                      const dateLocal = utcToLocalDateString(date);
+                      const isToday = dateLocal === todayLocal;
                       
                       return (
                         <div key={date} className={`border-l border-gray-200 first:border-l-0 px-2 ${isToday ? 'bg-blue-50' : ''}`}>
@@ -374,17 +472,41 @@ const PillTracker = () => {
               <h2 className="text-xl font-bold mb-4">Add Medication</h2>
               
               <div className="space-y-4">
-                <div>
+                <div className="relative autocomplete-container">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Medication Name
                   </label>
                   <input
                     type="text"
                     value={newMed.name}
-                    onChange={(e) => setNewMed(prev => ({ ...prev, name: e.target.value }))}
+                    onChange={(e) => {
+                      setNewMed(prev => ({ ...prev, name: e.target.value }));
+                      filterMedications(e.target.value);
+                    }}
+                    onFocus={() => {
+                      if (newMed.name.trim()) {
+                        filterMedications(newMed.name);
+                      }
+                    }}
                     className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="e.g. Vitamin D"
                   />
+                  
+                  {/* Autocomplete dropdown */}
+                  {showAutocomplete && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                      {filteredMedications.map((med, index) => (
+                        <div
+                          key={index}
+                          onClick={() => selectMedication(med)}
+                          className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-b-0"
+                        >
+                          <div className="font-medium text-sm text-gray-900">{med.name}</div>
+                          <div className="text-xs text-gray-600">{med.description}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -460,7 +582,7 @@ const PillTracker = () => {
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <label className="block text-sm font-medium text-gray-700">
-                      Daily Schedule
+                      Daily Schedule (Time & Pills per Dose)
                     </label>
                     <button
                       type="button"
@@ -481,14 +603,17 @@ const PillTracker = () => {
                           className="p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         />
                         {newMed.scheduleType === 'daily' && (
-                          <input
-                            type="number"
-                            min="1"
-                            value={dose.pills}
-                            onChange={(e) => updateDose(index, 'pills', parseInt(e.target.value))}
-                            className="w-20 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            placeholder="Pills"
-                          />
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              min="1"
+                              value={dose.pills}
+                              onChange={(e) => updateDose(index, 'pills', parseInt(e.target.value))}
+                              className="w-20 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              placeholder="1"
+                            />
+                            <span className="text-sm text-gray-600 whitespace-nowrap">pills at {dose.time}</span>
+                          </div>
                         )}
                         {newMed.dailyDoses.length > 1 && (
                           <button
