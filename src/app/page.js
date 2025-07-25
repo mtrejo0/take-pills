@@ -39,13 +39,12 @@ const PillTracker = () => {
 
   const [medicationHistory, setMedicationHistory] = useState({});
 
-  // Helper function to get current date string
-  const getCurrentDateString = () => {
+  // Helper function to get current date
+  const getCurrentDate = () => {
     const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    // Set to start of day to avoid time issues
+    now.setHours(0, 0, 0, 0);
+    return now;
   };
 
   // Load medication history from localStorage
@@ -184,23 +183,22 @@ const PillTracker = () => {
   };
 
   const toggleMedicationTaken = (medId, doseIndex, date) => {
-    const key = `${medId}-${doseIndex}-${date}`;
+    // Convert date to string for storage key
+    const dateString = date.toISOString().split('T')[0];
+    const key = `${medId}-${doseIndex}-${dateString}`;
     setMedicationHistory(prev => ({
       ...prev,
       [key]: !prev[key]
     }));
   };
 
-  const getAllDays = () => {
+    const getAllDays = () => {
     const days = [];
     for (let i = -(daysToShow - 1); i <= 0; i++) {
       const date = new Date();
       date.setDate(date.getDate() + i);
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const day = String(date.getDate()).padStart(2, '0');
-      const dateString = `${year}-${month}-${day}`;
-      days.push(dateString);
+      date.setHours(0, 0, 0, 0); // Set to start of day
+      days.push(date);
     }
     return days;
   };
@@ -229,21 +227,19 @@ const PillTracker = () => {
     return med.dailyDoses;
   };
 
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    const todayString = getCurrentDateString();
+  const formatDate = (date) => {
+    const today = getCurrentDate();
     
     // Create yesterday for comparison
-    const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
-    const year = yesterday.getFullYear();
-    const month = String(yesterday.getMonth() + 1).padStart(2, '0');
-    const day = String(yesterday.getDate()).padStart(2, '0');
-    const yesterdayString = `${year}-${month}-${day}`;
     
-    if (dateString === todayString) return `Today (${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})`;
-    if (dateString === yesterdayString) return `Yesterday (${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})`;
+    if (date.getTime() === today.getTime()) {
+      return `Today (${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})`;
+    }
+    if (date.getTime() === yesterday.getTime()) {
+      return `Yesterday (${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})`;
+    }
     
     return date.toLocaleDateString('en-US', { 
       weekday: 'short', 
@@ -255,8 +251,9 @@ const PillTracker = () => {
 
   const getCompletionStats = (med, date) => {
     const schedule = getMedicationScheduleForDay(med, date);
+    const dateString = date.toISOString().split('T')[0];
     const completed = schedule.filter((_, doseIndex) => 
-      medicationHistory[`${med.id}-${doseIndex}-${date}`]
+      medicationHistory[`${med.id}-${doseIndex}-${dateString}`]
     ).length;
     return { completed, total: schedule.length };
   };
@@ -313,11 +310,11 @@ const PillTracker = () => {
           <div className="bg-white rounded-lg shadow-sm p-3 mb-2 flex-shrink-0">
             <div className="grid gap-2" style={{ gridTemplateColumns: `240px repeat(${getAllDays().length}, minmax(200px, 200px))` }}>
               <div></div> {/* Empty space for medication names column */}
-                                  {getAllDays().map(date => {
-                      const todayString = getCurrentDateString();
-                      const isToday = date === todayString;
+                                                      {getAllDays().map(date => {
+                      const today = getCurrentDate();
+                      const isToday = date.getTime() === today.getTime();
                       return (
-                        <div key={date} className="text-center border-l border-gray-200 first:border-l-0 px-2">
+                        <div key={date.getTime()} className="text-center border-l border-gray-200 first:border-l-0 px-2">
                           <div className={`text-sm font-medium ${isToday ? 'text-blue-600' : 'text-gray-600'}`}>
                             {formatDate(date)}
                           </div>
@@ -397,14 +394,15 @@ const PillTracker = () => {
                     {/* Progress Grid - aligned with date headers */}
                     {allDays.map(date => {
                       const schedule = getMedicationScheduleForDay(med, date);
-                      const todayString = getCurrentDateString();
-                      const isToday = date === todayString;
+                      const today = getCurrentDate();
+                      const isToday = date.getTime() === today.getTime();
                       
                       return (
-                        <div key={date} className={`border-l border-gray-200 first:border-l-0 px-2 ${isToday ? 'bg-blue-50' : ''}`}>
+                        <div key={date.getTime()} className={`border-l border-gray-200 first:border-l-0 px-2 ${isToday ? 'bg-blue-50' : ''}`}>
                           <div className="space-y-1">
                             {schedule.map((dose, doseIndex) => {
-                              const isCompleted = medicationHistory[`${med.id}-${doseIndex}-${date}`];
+                              const dateString = date.toISOString().split('T')[0];
+                              const isCompleted = medicationHistory[`${med.id}-${doseIndex}-${dateString}`];
                               
                               return (
                                 <div 
