@@ -39,19 +39,12 @@ const PillTracker = () => {
 
   const [medicationHistory, setMedicationHistory] = useState({});
 
-  // Helper function to get current date in UTC for storage
-  const getCurrentDateUTC = () => {
+  // Helper function to get current date string
+  const getCurrentDateString = () => {
     const now = new Date();
-    const utcString = now.toUTCString();
-    return utcString;
-  };
-
-  // Helper function to convert UTC string to local date string for display
-  const utcToLocalDateString = (utcString) => {
-    const date = new Date(utcString);
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   };
 
@@ -203,9 +196,11 @@ const PillTracker = () => {
     for (let i = -(daysToShow - 1); i <= 0; i++) {
       const date = new Date();
       date.setDate(date.getDate() + i);
-      // Store in UTC
-      const utcString = date.toUTCString();
-      days.push(utcString);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const dateString = `${year}-${month}-${day}`;
+      days.push(dateString);
     }
     return days;
   };
@@ -234,21 +229,21 @@ const PillTracker = () => {
     return med.dailyDoses;
   };
 
-  const formatDate = (utcString) => {
-    const date = new Date(utcString);
-    const todayUTC = getCurrentDateUTC();
-    const todayLocal = utcToLocalDateString(todayUTC);
-    const dateLocal = utcToLocalDateString(utcString);
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    const todayString = getCurrentDateString();
     
     // Create yesterday for comparison
     const today = new Date();
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayUTC = yesterday.toUTCString();
-    const yesterdayLocal = utcToLocalDateString(yesterdayUTC);
+    const year = yesterday.getFullYear();
+    const month = String(yesterday.getMonth() + 1).padStart(2, '0');
+    const day = String(yesterday.getDate()).padStart(2, '0');
+    const yesterdayString = `${year}-${month}-${day}`;
     
-    if (dateLocal === todayLocal) return `Today (${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})`;
-    if (dateLocal === yesterdayLocal) return `Yesterday (${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})`;
+    if (dateString === todayString) return `Today (${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})`;
+    if (dateString === yesterdayString) return `Yesterday (${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})`;
     
     return date.toLocaleDateString('en-US', { 
       weekday: 'short', 
@@ -308,7 +303,7 @@ const PillTracker = () => {
               Showing {daysToShow} day{daysToShow !== 1 ? 's' : ''}
             </span>
             <div className="text-xs text-gray-500 ml-4">
-              💡 &ldquo;Today&rdquo; updates automatically each day
+              💡 "Today" updates automatically each day
             </div>
           </div>
         </div>
@@ -318,20 +313,18 @@ const PillTracker = () => {
           <div className="bg-white rounded-lg shadow-sm p-3 mb-2 flex-shrink-0">
             <div className="grid gap-2" style={{ gridTemplateColumns: `240px repeat(${getAllDays().length}, minmax(200px, 200px))` }}>
               <div></div> {/* Empty space for medication names column */}
-              {getAllDays().map(date => {
-                const todayUTC = getCurrentDateUTC();
-                const todayLocal = utcToLocalDateString(todayUTC);
-                const dateLocal = utcToLocalDateString(date);
-                const isToday = dateLocal === todayLocal;
-                return (
-                  <div key={date} className="text-center border-l border-gray-200 first:border-l-0 px-2">
-                    <div className={`text-sm font-medium ${isToday ? 'text-blue-600' : 'text-gray-600'}`}>
-                      {formatDate(date)}
-                    </div>
+                                  {getAllDays().map(date => {
+                      const todayString = getCurrentDateString();
+                      const isToday = date === todayString;
+                      return (
+                        <div key={date} className="text-center border-l border-gray-200 first:border-l-0 px-2">
+                          <div className={`text-sm font-medium ${isToday ? 'text-blue-600' : 'text-gray-600'}`}>
+                            {formatDate(date)}
+                          </div>
 
-                  </div>
-                );
-              })}
+                        </div>
+                      );
+                    })}
             </div>
           </div>
         )}
@@ -404,10 +397,8 @@ const PillTracker = () => {
                     {/* Progress Grid - aligned with date headers */}
                     {allDays.map(date => {
                       const schedule = getMedicationScheduleForDay(med, date);
-                      const todayUTC = getCurrentDateUTC();
-                      const todayLocal = utcToLocalDateString(todayUTC);
-                      const dateLocal = utcToLocalDateString(date);
-                      const isToday = dateLocal === todayLocal;
+                      const todayString = getCurrentDateString();
+                      const isToday = date === todayString;
                       
                       return (
                         <div key={date} className={`border-l border-gray-200 first:border-l-0 px-2 ${isToday ? 'bg-blue-50' : ''}`}>
