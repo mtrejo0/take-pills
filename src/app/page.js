@@ -308,7 +308,7 @@ const PillTracker = () => {
               Showing {daysToShow} day{daysToShow !== 1 ? 's' : ''}
             </span>
             <div className="text-xs text-gray-500 ml-4">
-              💡 "Today" updates automatically each day
+              💡 &ldquo;Today&rdquo; updates automatically each day
             </div>
           </div>
         </div>
